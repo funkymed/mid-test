@@ -3,6 +3,7 @@ import { startMidi } from "./lib/midi";
 import * as THREE from "three";
 import { fragmentShader, vertexShader } from "./lib/shader";
 import { useEffect, useRef, useState } from "react";
+import TWEEN from "@tweenjs/tween.js";
 
 const getRandomOffset: any = (arr: Array<any>, current: any): any => {
   const off = Math.floor(Math.random() * arr.length);
@@ -19,6 +20,8 @@ let scene: THREE.Scene;
 let camera: THREE.Camera;
 let renderer: THREE.Renderer;
 let sceneObjects: any = [];
+let noteObjects: any = [];
+let noteTweens: any = [];
 let clock: THREE.Clock;
 const nbCube = 6;
 
@@ -54,8 +57,26 @@ function adjustLighting() {
 const colors = [
   0xacb6e5, 0x74ebd5, 0xffbb00, 0x00bbff, 0xff00ff, 0xffff00, 0xff5555,
 ];
+const notes = ["C3-3", "D3-3", "E3-3", "F3-3", "G3-3", "A3-3", "B3-3"];
 
 function addBasicCube() {
+  // Rectangles notes
+  let geometry1 = new THREE.BoxGeometry(2, 15, 0);
+
+  for (let r = 0; r < notes.length; r++) {
+    const material = new THREE.MeshBasicMaterial();
+    material.color = new THREE.Color(getRandomItem(colors));
+    material.transparent = true;
+    material.opacity = 0;
+
+    let mesh = new THREE.Mesh(geometry1, material);
+    mesh.position.x = -notes.length + r * 2.2 + 0.25;
+    mesh.position.z = -1;
+    scene.add(mesh);
+    noteObjects[notes[r]] = mesh;
+  }
+  console.log(noteObjects);
+  // Cubes
   let geometry = new THREE.BoxGeometry(1, 1, 1);
   for (let r = 0; r < nbCube; r++) {
     let uniforms = {
@@ -70,7 +91,7 @@ function addBasicCube() {
     });
 
     let mesh = new THREE.Mesh(geometry, material);
-    mesh.position.x = -nbCube + r * 2;
+    mesh.position.x = -nbCube + r * 2 + 0.5;
     scene.add(mesh);
     sceneObjects.push(mesh);
   }
@@ -99,10 +120,42 @@ function App() {
     setPos(popos);
   };
 
+  const callbackNote = (note: any, attack: any, aftertouch: any) => {
+    if (noteObjects[note]) {
+      const material = noteObjects[note].material;
+      if (aftertouch) {
+        material.opacity = attack;
+      } else {
+        if (noteTweens[note]) {
+          noteTweens[note].stop();
+          TWEEN.remove(noteTweens[note]);
+        }
+        noteTweens[note] = new TWEEN.Tween(material)
+          .to({ opacity: 0 }, 500)
+          .easing(TWEEN.Easing.Sinusoidal.InOut)
+          .start();
+      }
+    }
+  };
+
+  const pitchbendCallback = (value: any) => {
+    yy = value / 50;
+    setY(yy);
+  };
+
+  const getNotes = () => {
+    const obj: any = {};
+    notes.forEach((n: any) => {
+      obj[n] = callbackNote;
+    });
+
+    return obj;
+  };
+
   const animationLoop = () => {
     renderer.render(scene, camera);
 
-    console.log(popos, xx, yy);
+    TWEEN.update();
     sceneObjects.forEach((object: THREE.Mesh, r: any) => {
       const delta = clock.getElapsedTime() * 2;
 
@@ -125,6 +178,10 @@ function App() {
           74: callback20,
         },
       },
+
+      notes: getNotes(),
+      pitchbend: pitchbendCallback,
+      debug: false,
     });
 
     // threejs

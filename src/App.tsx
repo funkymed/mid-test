@@ -123,17 +123,17 @@ function App() {
   };
 
   const callbackNote = (note: any, attack: any, aftertouch: any) => {
+    if (noteTweens[note]) {
+      TWEEN.remove(noteTweens[note]);
+    }
+
     if (noteObjects[note]) {
       const material = noteObjects[note].material;
       if (aftertouch) {
         material.opacity = 1;
       } else {
-        if (noteTweens[note]) {
-          noteTweens[note].stop();
-          TWEEN.remove(noteTweens[note]);
-        }
         noteTweens[note] = new TWEEN.Tween(material)
-          .to({ opacity: 0 }, 500)
+          .to({ opacity: 0 }, 1500)
           .easing(TWEEN.Easing.Sinusoidal.InOut)
           .start();
       }
@@ -202,13 +202,7 @@ function App() {
     return () => cancelAnimationFrame(requestRef.current);
   }, []);
 
-  return (
-    <>
-      <div>
-        {x} - {y} - {pos}
-      </div>
-    </>
-  );
+  return <></>;
 }
 
 export default App;

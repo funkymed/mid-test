@@ -4,8 +4,7 @@ const noteCallback = (notes: any, e: any, aftertouch: boolean) => {
   if (notes) {
     for (let note in notes) {
       if (
-        `${e.note.identifier}-${e.note.octave}`.toLowerCase() ===
-          note.toLowerCase() &&
+        e.note.identifier.toLowerCase() === note.toLowerCase() &&
         typeof notes[note] === "function"
       ) {
         notes[note](note, e.note.attack, aftertouch);

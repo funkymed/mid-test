@@ -17,6 +17,7 @@ const getRandomItem: any = (arr: Array<any>): any => {
 // 3D
 
 let scene: THREE.Scene;
+
 let camera: THREE.Camera;
 let renderer: THREE.Renderer;
 let sceneObjects: any = [];
@@ -28,6 +29,7 @@ const nbCube = 6;
 function init() {
   clock = new THREE.Clock();
   scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x000000);
 
   camera = new THREE.PerspectiveCamera(
     75,
@@ -57,7 +59,7 @@ function adjustLighting() {
 const colors = [
   0xacb6e5, 0x74ebd5, 0xffbb00, 0x00bbff, 0xff00ff, 0xffff00, 0xff5555,
 ];
-const notes = ["C3-3", "D3-3", "E3-3", "F3-3", "G3-3", "A3-3", "B3-3"];
+const notes = ["C3", "D3", "E3", "F3", "G3", "A3", "B3"];
 
 function addBasicCube() {
   // Rectangles notes
@@ -124,7 +126,7 @@ function App() {
     if (noteObjects[note]) {
       const material = noteObjects[note].material;
       if (aftertouch) {
-        material.opacity = attack;
+        material.opacity = 1;
       } else {
         if (noteTweens[note]) {
           noteTweens[note].stop();
@@ -137,19 +139,19 @@ function App() {
       }
     }
   };
+  const backFlash = (note: any, attack: any, aftertouch: any) => {
+    if (aftertouch) {
+      scene.background = new THREE.Color(getRandomItem(colors));
+      new TWEEN.Tween(scene)
+        .to({ background: new THREE.Color(0x000000) }, 200)
+        .easing(TWEEN.Easing.Sinusoidal.InOut)
+        .start();
+    }
+  };
 
   const pitchbendCallback = (value: any) => {
     yy = value / 50;
     setY(yy);
-  };
-
-  const getNotes = () => {
-    const obj: any = {};
-    notes.forEach((n: any) => {
-      obj[n] = callbackNote;
-    });
-
-    return obj;
   };
 
   const animationLoop = () => {
@@ -179,7 +181,16 @@ function App() {
         },
       },
 
-      notes: getNotes(),
+      notes: {
+        C2: backFlash,
+        C3: callbackNote,
+        D3: callbackNote,
+        E3: callbackNote,
+        F3: callbackNote,
+        G3: callbackNote,
+        A3: callbackNote,
+        B3: callbackNote,
+      },
       pitchbend: pitchbendCallback,
       debug: false,
     });

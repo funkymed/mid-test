@@ -171,6 +171,14 @@ function App() {
     setPos(popos);
   };
 
+  const resetPos = (note: any, attack: any, aftertouch: any) => {
+    if (aftertouch) {
+      callback20(0.5);
+      callback19(0.5);
+      callback18(0.5);
+    }
+  };
+
   const allNotes = (note: any, attack: any, aftertouch: any) => {
     if (aftertouch) {
       for (let n of notes) {
@@ -224,8 +232,8 @@ function App() {
     sceneObjects.forEach((object: THREE.Mesh, r: any) => {
       const delta = clock.getElapsedTime() * 2;
 
-      object.rotation.x += popos + r / 100;
-      object.rotation.y += popos / 2 + r / 200;
+      object.rotation.x += (popos + 1 / 100) * 2;
+      object.rotation.y += (popos / 2 + 1 / 200) * 2;
       object.position.y = (Math.sin(delta + r) * (yy * 30) * nbCube) / 2;
       object.position.z = (Math.sin(delta + r) * (xx * 30) * nbCube) / 2;
     });
@@ -274,6 +282,7 @@ function App() {
         "D#2": glitchNote,
         E2: pixelateNote,
         F2: bloomNote,
+        G2: resetPos,
         C3: callbackNote,
         D3: callbackNote,
         E3: callbackNote,

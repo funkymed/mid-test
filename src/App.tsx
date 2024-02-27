@@ -58,6 +58,7 @@ function adjustLighting() {
 
 const colors = [
   0xacb6e5, 0x74ebd5, 0xffbb00, 0x00bbff, 0xff00ff, 0xffff00, 0xff5555,
+  0xff55ff, 0x00bbff, 0x55ff55, 0x5555ff,
 ];
 const notes = ["C3", "D3", "E3", "F3", "G3", "A3", "B3"];
 
@@ -122,6 +123,18 @@ function App() {
     setPos(popos);
   };
 
+  const allNotes = (note: any, attack: any, aftertouch: any) => {
+    if (aftertouch) {
+      for (let n of notes) {
+        if (noteTweens[n]) {
+          TWEEN.remove(noteTweens[n]);
+        }
+        const material = noteObjects[n].material;
+        material.opacity = attack;
+        callbackNote(n, 1, false);
+      }
+    }
+  };
   const callbackNote = (note: any, attack: any, aftertouch: any) => {
     if (noteTweens[note]) {
       TWEEN.remove(noteTweens[note]);
@@ -133,7 +146,7 @@ function App() {
         material.opacity = 1;
       } else {
         noteTweens[note] = new TWEEN.Tween(material)
-          .to({ opacity: 0 }, 1500)
+          .to({ opacity: 0 }, 1000)
           .easing(TWEEN.Easing.Sinusoidal.InOut)
           .start();
       }
@@ -141,7 +154,8 @@ function App() {
   };
   const backFlash = (note: any, attack: any, aftertouch: any) => {
     if (aftertouch) {
-      scene.background = new THREE.Color(getRandomItem(colors));
+      const color = note === "C2" ? getRandomItem(colors) : "0xFFFFFF";
+      scene.background = new THREE.Color(color);
       new TWEEN.Tween(scene)
         .to({ background: new THREE.Color(0x000000) }, 200)
         .easing(TWEEN.Easing.Sinusoidal.InOut)
@@ -183,6 +197,8 @@ function App() {
 
       notes: {
         C2: backFlash,
+        "C#2": backFlash,
+        D2: allNotes,
         C3: callbackNote,
         D3: callbackNote,
         E3: callbackNote,
@@ -202,7 +218,14 @@ function App() {
     return () => cancelAnimationFrame(requestRef.current);
   }, []);
 
-  return <></>;
+  return (
+    <>
+      <div style={{ position: "absolute", top: 5, left: 5, color: "white" }}>
+        {x}
+        <br /> {y} <br /> {pos}
+      </div>
+    </>
+  );
 }
 
 export default App;

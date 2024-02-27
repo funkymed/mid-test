@@ -4,6 +4,15 @@ import * as THREE from "three";
 import { fragmentShader, vertexShader } from "./lib/shader";
 import { useEffect, useRef, useState } from "react";
 import TWEEN from "@tweenjs/tween.js";
+import {
+  BloomEffect,
+  EffectComposer,
+  EffectPass,
+  RenderPass,
+  GlitchEffect,
+  GlitchMode,
+  PixelationEffect,
+} from "postprocessing"; // https://github.com/pmndrs/postprocessing
 
 const getRandomOffset: any = (arr: Array<any>, current: any): any => {
   const off = Math.floor(Math.random() * arr.length);
@@ -19,11 +28,15 @@ const getRandomItem: any = (arr: Array<any>): any => {
 let scene: THREE.Scene;
 
 let camera: THREE.Camera;
-let renderer: THREE.Renderer;
+let renderer: THREE.WebGLRenderer;
+let composer: EffectComposer;
 let sceneObjects: any = [];
 let noteObjects: any = [];
 let noteTweens: any = [];
 let clock: THREE.Clock;
+let glitch: GlitchEffect;
+let bloom: BloomEffect;
+let pixelate: PixelationEffect;
 const nbCube = 6;
 
 function init() {
@@ -39,9 +52,34 @@ function init() {
   );
   camera.position.z = nbCube;
 
-  renderer = new THREE.WebGLRenderer();
+  renderer = new THREE.WebGLRenderer({
+    powerPreference: "high-performance",
+    antialias: false,
+    stencil: false,
+    depth: false,
+  });
+
   renderer.setSize(window.innerWidth, window.innerHeight);
 
+  composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+
+  pixelate = new PixelationEffect();
+  pixelate.granularity = 0;
+  composer.addPass(new EffectPass(camera, pixelate));
+
+  glitch = new GlitchEffect();
+  glitch.mode = GlitchMode.DISABLED;
+  composer.addPass(new EffectPass(camera, glitch));
+
+  bloom = new BloomEffect({
+    intensity: 4,
+    radius: 0.4,
+    luminanceThreshold: 0.214,
+    luminanceSmoothing: 0,
+  });
+
+  composer.addPass(new EffectPass(camera, bloom));
   document.body.appendChild(renderer.domElement);
   adjustLighting();
   addBasicCube();
@@ -169,7 +207,8 @@ function App() {
   };
 
   const animationLoop = () => {
-    renderer.render(scene, camera);
+    // renderer.render(scene, camera);
+    composer.render();
 
     TWEEN.update();
     sceneObjects.forEach((object: THREE.Mesh, r: any) => {
@@ -182,6 +221,29 @@ function App() {
     });
 
     requestRef.current = requestAnimationFrame(animationLoop);
+  };
+
+  const glitchNote = (note: any, attack: any, aftertouch: any) => {
+    glitch.mode = GlitchMode.CONSTANT_WILD;
+    setTimeout(() => {
+      glitch.mode = GlitchMode.DISABLED;
+    }, 300);
+  };
+
+  const pixelateNote = (note: any, attack: any, aftertouch: any) => {
+    pixelate.granularity = 64;
+    noteTweens[note] = new TWEEN.Tween(pixelate)
+      .to({ granularity: 0 }, 300)
+      .easing(TWEEN.Easing.Sinusoidal.InOut)
+      .start();
+  };
+
+  const bloomNote = (note: any, attack: any, aftertouch: any) => {
+    bloom.intensity = 20;
+    noteTweens[note] = new TWEEN.Tween(bloom)
+      .to({ intensity: 4 }, 300)
+      .easing(TWEEN.Easing.Sinusoidal.InOut)
+      .start();
   };
 
   useEffect(() => {
@@ -199,6 +261,9 @@ function App() {
         C2: backFlash,
         "C#2": backFlash,
         D2: allNotes,
+        "D#2": glitchNote,
+        E2: pixelateNote,
+        F2: bloomNote,
         C3: callbackNote,
         D3: callbackNote,
         E3: callbackNote,

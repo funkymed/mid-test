@@ -12,6 +12,8 @@ import {
   GlitchEffect,
   GlitchMode,
   PixelationEffect,
+  ScanlineEffect,
+  GridEffect,
 } from "postprocessing"; // https://github.com/pmndrs/postprocessing
 
 const getRandomOffset: any = (arr: Array<any>, current: any): any => {
@@ -37,7 +39,9 @@ let clock: THREE.Clock;
 let glitch: GlitchEffect;
 let bloom: BloomEffect;
 let pixelate: PixelationEffect;
-const nbCube = 6;
+let scanline: ScanlineEffect;
+let grid: GridEffect;
+const nbCube = 8;
 
 function init() {
   clock = new THREE.Clock();
@@ -67,6 +71,12 @@ function init() {
   pixelate = new PixelationEffect();
   pixelate.granularity = 0;
   composer.addPass(new EffectPass(camera, pixelate));
+
+  grid = new GridEffect({ scale: 2, lineWidth: 0.5 });
+  composer.addPass(new EffectPass(camera, grid));
+
+  scanline = new ScanlineEffect({ density: 1.3 });
+  // composer.addPass(new EffectPass(camera, scanline));
 
   glitch = new GlitchEffect();
   glitch.mode = GlitchMode.DISABLED;
@@ -169,7 +179,7 @@ function App() {
         }
         const material = noteObjects[n].material;
         material.opacity = attack;
-        callbackNote(n, 1, false);
+        callbackNote(n, attack, false);
       }
     }
   };
@@ -181,7 +191,7 @@ function App() {
     if (noteObjects[note]) {
       const material = noteObjects[note].material;
       if (aftertouch) {
-        material.opacity = 1;
+        material.opacity = attack;
       } else {
         noteTweens[note] = new TWEEN.Tween(material)
           .to({ opacity: 0 }, 1000)
@@ -286,8 +296,15 @@ function App() {
   return (
     <>
       <div style={{ position: "absolute", top: 5, left: 5, color: "white" }}>
-        {x}
-        <br /> {y} <br /> {pos}
+        Knob 2 : {y} <br />
+        Knob 10: {pos}
+        <br />
+        Knob 11 : {x}
+      </div>
+      <div
+        style={{ position: "absolute", bottom: 5, right: 5, color: "white" }}
+      >
+        <p>Tiny midi test by med/mandarine</p>
       </div>
     </>
   );

@@ -1,7 +1,6 @@
 import "./App.css";
-import { startMidi } from "./lib/midi";
+import { actionMidi, startMidi } from "./lib/midi";
 import * as THREE from "three";
-import { fragmentShader, vertexShader } from "./lib/shader";
 import { useEffect, useRef, useState } from "react";
 import TWEEN from "@tweenjs/tween.js";
 import {
@@ -14,7 +13,16 @@ import {
   PixelationEffect,
   ScanlineEffect,
   GridEffect,
+  SMAAEffect,
+  SMAAPreset,
+  ChromaticAberrationEffect,
 } from "postprocessing"; // https://github.com/pmndrs/postprocessing
+import { RectAreaLightHelper } from "./helpers/RectAreaLightHelper";
+import { RectAreaLightUniformsLib } from "./helpers/RectAreaLightUniformsLib";
+import { OrbitControls } from "./controls/OrbitControls";
+import { isNullishCoalesce } from "typescript";
+import { fragmentShader2, vertexShader2 } from "./lib/shader2";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 const getRandomOffset: any = (arr: Array<any>, current: any): any => {
   const off = Math.floor(Math.random() * arr.length);
@@ -25,26 +33,44 @@ const getRandomItem: any = (arr: Array<any>): any => {
   return arr[getRandomOffset(arr, -1)];
 };
 
-// 3D
+type events = {
+  e: any;
+  time: number;
+};
+
+type tape = {
+  duration: number;
+  repeater: number;
+  events: Array<events>;
+};
 
 let scene: THREE.Scene;
-
-let camera: THREE.Camera;
+let camera: THREE.PerspectiveCamera;
 let renderer: THREE.WebGLRenderer;
 let composer: EffectComposer;
 let sceneObjects: any = [];
 let noteObjects: any = [];
 let noteTweens: any = [];
-let clock: THREE.Clock;
 let glitch: GlitchEffect;
 let bloom: BloomEffect;
 let pixelate: PixelationEffect;
 let scanline: ScanlineEffect;
 let grid: GridEffect;
+let smaa: SMAAEffect;
+let speed: number = 500;
+let ambientLight: THREE.AmbientLight;
+let uniforms: any;
+let megaLight: THREE.RectAreaLight;
+let chroma: ChromaticAberrationEffect;
+let groupMsh: THREE.Group;
+let timeFly: THREE.Clock;
+let isRecording: boolean = false;
+let tapeOffset: number = 0;
+let magneto: Array<tape> = [];
+let isLoopActivated: boolean = true;
 const nbCube = 8;
 
 function init() {
-  clock = new THREE.Clock();
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
 
@@ -52,9 +78,9 @@ function init() {
     75,
     window.innerWidth / window.innerHeight,
     0.1,
-    1000
+    2000
   );
-  camera.position.z = nbCube;
+  camera.position.set(0, 0, -7);
 
   renderer = new THREE.WebGLRenderer({
     powerPreference: "high-performance",
@@ -63,45 +89,133 @@ function init() {
     depth: false,
   });
 
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); //set pixel ratio
+  renderer.setSize(window.innerWidth, window.innerHeight); // make it full screen
+  renderer.outputEncoding = THREE.LinearEncoding; // set color encoding
+  renderer.toneMapping = THREE.LinearToneMapping; // set the toneMapping
+  renderer.toneMappingExposure = 1.2; // set the exposure
+
+  window.addEventListener("resize", () => {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); //set pixel ratio
+    renderer.setSize(window.innerWidth, window.innerHeight); // make it full screen
+  });
 
   composer = new EffectComposer(renderer);
+  composer.setSize(window.innerWidth, window.innerHeight);
   composer.addPass(new RenderPass(scene, camera));
+
+  chroma = new ChromaticAberrationEffect();
+  chroma.radialModulation = true;
+  chroma.modulationOffset = 5;
+  composer.addPass(new EffectPass(camera, chroma));
 
   pixelate = new PixelationEffect();
   pixelate.granularity = 0;
   composer.addPass(new EffectPass(camera, pixelate));
 
-  grid = new GridEffect({ scale: 2, lineWidth: 0.5 });
+  grid = new GridEffect({ scale: 1, lineWidth: 0.1 });
   composer.addPass(new EffectPass(camera, grid));
-
-  scanline = new ScanlineEffect({ density: 1.3 });
-  // composer.addPass(new EffectPass(camera, scanline));
 
   glitch = new GlitchEffect();
   glitch.mode = GlitchMode.DISABLED;
   composer.addPass(new EffectPass(camera, glitch));
 
   bloom = new BloomEffect({
-    intensity: 4,
-    radius: 0.4,
+    intensity: 9,
+    radius: 0.5,
     luminanceThreshold: 0.214,
     luminanceSmoothing: 0,
   });
-
   composer.addPass(new EffectPass(camera, bloom));
+
+  smaa = new SMAAEffect({ preset: SMAAPreset.ULTRA });
+  composer.addPass(new EffectPass(camera, smaa));
+
   document.body.appendChild(renderer.domElement);
+
   adjustLighting();
   addBasicCube();
+  startShader();
+  // loadObj();
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.update();
+}
+
+function loadObj() {
+  const loader = new GLTFLoader();
+  loader.load(
+    // resource URL
+    "WHDv-fish-tank.glb",
+    function (glb) {
+      groupMsh = glb.scene;
+      // groupMsh.children.forEach((msh) => {
+      //   const mesh = msh as THREE.Mesh;
+      //   const material = mesh.material as THREE.MeshBasicMaterial;
+      //   if (material.blending) {
+      //     material.blending = THREE.MultiplyBlending;
+      //   }
+      // });
+
+      scene.add(groupMsh);
+    }
+  );
+}
+
+function startShader() {
+  const geometry = new THREE.PlaneGeometry(2, 2);
+
+  uniforms = {
+    time: { value: 1.0 },
+  };
+
+  const material = new THREE.ShaderMaterial({
+    uniforms,
+    vertexShader: vertexShader2,
+    fragmentShader: fragmentShader2,
+    transparent: true,
+    opacity: 0.025,
+  });
+
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.z = -13;
+  // scene.add(mesh);
 }
 
 function adjustLighting() {
-  let pointLight = new THREE.PointLight(0xdddddd);
-  pointLight.position.set(-5, -3, 3);
+  let pointLight: THREE.PointLight = new THREE.PointLight(0x333333);
+  pointLight.position.set(-25, 13, -25);
+  pointLight.intensity = 10;
   scene.add(pointLight);
 
-  let ambientLight = new THREE.AmbientLight(0xff5050);
+  ambientLight = new THREE.AmbientLight(0x888888);
   scene.add(ambientLight);
+
+  RectAreaLightUniformsLib.init();
+
+  const w = 10;
+  for (let r = 0; r < notes.length; r++) {
+    const rectLight = new THREE.RectAreaLight(getRandomItem(colors), 2, w, 100);
+    rectLight.power = 200;
+    rectLight.intensity = 0;
+    rectLight.height = 0;
+    rectLight.position.x = (-notes.length * w) / 2 + (w + 2) * r;
+    rectLight.position.z = 25;
+    scene.add(rectLight);
+    scene.add(new RectAreaLightHelper(rectLight));
+    noteObjects[notes[r]] = rectLight;
+  }
+
+  megaLight = new THREE.RectAreaLight(0xffffff, 120, 120, 120);
+  megaLight.power = 20;
+  megaLight.intensity = 0;
+  megaLight.position.z = -25;
+  megaLight.rotation.x = 10;
+  scene.add(megaLight);
+  scene.add(new RectAreaLightHelper(megaLight));
 }
 
 const colors = [
@@ -111,34 +225,19 @@ const colors = [
 const notes = ["C3", "D3", "E3", "F3", "G3", "A3", "B3"];
 
 function addBasicCube() {
-  // Rectangles notes
-  let geometry1 = new THREE.BoxGeometry(2, 15, 0);
-
-  for (let r = 0; r < notes.length; r++) {
-    const material = new THREE.MeshBasicMaterial();
-    material.color = new THREE.Color(getRandomItem(colors));
-    material.transparent = true;
-    material.opacity = 0;
-
-    let mesh = new THREE.Mesh(geometry1, material);
-    mesh.position.x = -notes.length + r * 2.2 + 0.25;
-    mesh.position.z = -1;
-    scene.add(mesh);
-    noteObjects[notes[r]] = mesh;
-  }
-  console.log(noteObjects);
   // Cubes
-  let geometry = new THREE.BoxGeometry(1, 1, 1);
+  let geometry = new THREE.BoxGeometry(1.2, 1.2, 1.2);
   for (let r = 0; r < nbCube; r++) {
     let uniforms = {
       colorB: { type: "vec3", value: new THREE.Color(getRandomItem(colors)) },
       colorA: { type: "vec3", value: new THREE.Color(getRandomItem(colors)) },
     };
 
-    let material = new THREE.ShaderMaterial({
-      uniforms: uniforms,
-      fragmentShader: fragmentShader(),
-      vertexShader: vertexShader(),
+    let material = new THREE.MeshStandardMaterial({
+      color: getRandomItem(colors),
+      roughness: 0,
+      metalness: 0,
+      flatShading: false,
     });
 
     let mesh = new THREE.Mesh(geometry, material);
@@ -180,37 +279,46 @@ function App() {
   };
 
   const allNotes = (note: any, attack: any, aftertouch: any) => {
-    if (aftertouch) {
-      for (let n of notes) {
-        if (noteTweens[n]) {
-          TWEEN.remove(noteTweens[n]);
-        }
-        const material = noteObjects[n].material;
-        material.opacity = attack;
-        callbackNote(n, attack, false);
+    for (let n of notes) {
+      if (noteTweens[n]) {
+        TWEEN.remove(noteTweens[n]);
       }
+      noteObjects[n].intensity = attack;
+      callbackNote(n, attack, aftertouch);
     }
   };
   const callbackNote = (note: any, attack: any, aftertouch: any) => {
-    if (noteTweens[note]) {
-      TWEEN.remove(noteTweens[note]);
+    const twn = noteTweens[note];
+    if (twn) {
+      TWEEN.remove(twn);
     }
-
-    if (noteObjects[note]) {
-      const material = noteObjects[note].material;
+    const msh: THREE.RectAreaLight = noteObjects[note];
+    if (msh) {
       if (aftertouch) {
-        material.opacity = attack;
+        msh.intensity = attack;
+        msh.height = attack * 50;
       } else {
-        noteTweens[note] = new TWEEN.Tween(material)
-          .to({ opacity: 0 }, 1000)
+        noteTweens[note] = new TWEEN.Tween(noteObjects[note])
+          .to({ intensity: 0, height: 0 }, 1000)
           .easing(TWEEN.Easing.Sinusoidal.InOut)
+          .end()
           .start();
       }
     }
   };
+
+  const megaLightFlash = (value: any) => {
+    megaLight.intensity = 0.3;
+    new TWEEN.Tween(megaLight)
+      .to({ intensity: 0 }, 1000)
+      .easing(TWEEN.Easing.Sinusoidal.InOut)
+      .end()
+      .start();
+  };
+
   const backFlash = (note: any, attack: any, aftertouch: any) => {
     if (aftertouch) {
-      const color = note === "C2" ? getRandomItem(colors) : "0xFFFFFF";
+      const color = note === "C2" ? getRandomItem(colors) : 0xffffff;
       scene.background = new THREE.Color(color);
       new TWEEN.Tween(scene)
         .to({ background: new THREE.Color(0x000000) }, 200)
@@ -224,14 +332,23 @@ function App() {
     setY(yy);
   };
 
-  const animationLoop = () => {
+  const callbackSpeed = (value: any) => {
+    speed = 1000 - value * 1000;
+  };
+
+  const animationLoop = (time: number) => {
     // renderer.render(scene, camera);
     composer.render();
 
-    TWEEN.update();
-    sceneObjects.forEach((object: THREE.Mesh, r: any) => {
-      const delta = clock.getElapsedTime() * 2;
+    uniforms["time"].value = time / 500;
 
+    TWEEN.update();
+
+    if (groupMsh) {
+      groupMsh.rotation.y -= 0.1;
+    }
+    sceneObjects.forEach((object: THREE.Mesh, r: any) => {
+      const delta = time / speed;
       object.rotation.x += (popos + 1 / 100) * 2;
       object.rotation.y += (popos / 2 + 1 / 200) * 2;
       object.position.y = (Math.sin(delta + r) * (yy * 30) * nbCube) / 2;
@@ -246,6 +363,80 @@ function App() {
     setTimeout(() => {
       glitch.mode = GlitchMode.DISABLED;
     }, 300);
+  };
+
+  const ambiantCallback = (value: any) => {
+    ambientLight.intensity = value * 3;
+  };
+
+  const resetRecorder = (note: any, attack: any, aftertouch: any) => {
+    if (!aftertouch) {
+      magneto.forEach((man) => {
+        window.clearInterval(man.repeater);
+      });
+      magneto = [];
+    }
+  };
+  const recordAndPlay = (note: any, attack: any, aftertouch: any) => {
+    if (aftertouch && !isRecording) {
+      magneto.forEach((man, o) => {
+        window.clearInterval(man.repeater);
+        if (man.events.length === 0) {
+          delete magneto[o];
+        }
+      });
+      // start recording
+      isRecording = true;
+      timeFly = new THREE.Clock();
+      timeFly.start();
+      tapeOffset = magneto.length;
+      magneto[tapeOffset] = {
+        duration: 0,
+        events: [],
+        repeater: 0,
+      };
+    } else if (isRecording) {
+      // play
+      isRecording = false;
+      if (timeFly) {
+        timeFly.stop();
+        magneto[tapeOffset].duration = timeFly.elapsedTime;
+      }
+
+      // restart replay
+      console.log("restart replay");
+      magneto.forEach((tape, o) => {
+        if (tape.events.length > 0) {
+          playTape(tape);
+        }
+      });
+    }
+  };
+
+  const playTape = (tape: tape) => {
+    window.clearInterval(tape.repeater);
+    tape.repeater = window.setInterval(
+      playEvents,
+      tape.duration * 1000,
+      tape.events
+    );
+    playEvents(tape.events);
+  };
+
+  const playEvents = (events: any) => {
+    events.forEach((data: events) => {
+      setTimeout(actionMidi, data.time * 1000, data.e);
+    });
+  };
+
+  const record = (e: any) => {
+    if (isRecording) {
+      console.log(e);
+      magneto[tapeOffset].events.push({
+        time: timeFly.getElapsedTime(),
+        e,
+      });
+    }
   };
 
   const pixelateNote = (note: any, attack: any, aftertouch: any) => {
@@ -272,6 +463,8 @@ function App() {
           18: callback18,
           19: callback19,
           74: callback20,
+          71: callbackSpeed,
+          16: ambiantCallback,
         },
       },
 
@@ -281,7 +474,9 @@ function App() {
         D2: allNotes,
         "D#2": glitchNote,
         E2: pixelateNote,
+        "E#2": resetPos,
         F2: bloomNote,
+        "F#2": megaLightFlash,
         G2: resetPos,
         C3: callbackNote,
         D3: callbackNote,
@@ -290,9 +485,13 @@ function App() {
         G3: callbackNote,
         A3: callbackNote,
         B3: callbackNote,
+        B4: resetRecorder,
+        C5: recordAndPlay,
       },
       pitchbend: pitchbendCallback,
       debug: false,
+      record: record,
+      recordNote: "C5",
     });
 
     // threejs

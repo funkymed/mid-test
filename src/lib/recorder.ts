@@ -64,7 +64,7 @@ export default class Recorder {
       tape.duration * 1000,
       tape.events
     );
-    this.playEvents(tape.events);
+    
   }
 
   playEvents(events: any) {

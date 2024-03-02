@@ -33,7 +33,9 @@ const colors = [
   0xacb6e5, 0x74ebd5, 0xffbb00, 0x00bbff, 0xff00ff, 0xffff00, 0xff5555,
   0xff55ff, 0x00bbff, 0x55ff55, 0x5555ff,
 ];
+
 const notes = ["C3", "D3", "E3", "F3", "G3", "A3", "B3"];
+const keyboardnote = ["w", "x", "c", "v", "b", "n", ","];
 
 function init() {
   MyScene = new Scene3D(notes, colors);
@@ -174,6 +176,7 @@ function App() {
       }
     }
   };
+
   const glitchNote = (note: any, attack: any, aftertouch: any) => {
     MyScene.glitch.mode = GlitchMode.CONSTANT_WILD;
     setTimeout(() => {
@@ -245,6 +248,34 @@ function App() {
 
     // threejs
     init();
+
+    document.addEventListener(
+      "keydown",
+      (event: any) => {
+        const keyName = event.key;
+        for (let k in keyboardnote) {
+          if (keyName === keyboardnote[k]) {
+            callbackNote(notes[k], 1, true);
+          }
+        }
+      },
+      false
+    );
+    document.addEventListener(
+      "keydown",
+      (event: any) => {
+        const keyName = event.key;
+        if (keyName === "t") {
+          tapeBPM(false, false, true);
+        }
+        for (let k in keyboardnote) {
+          if (keyName === keyboardnote[k]) {
+            callbackNote(notes[k], 1, false);
+          }
+        }
+      },
+      false
+    );
 
     requestRef.current = requestAnimationFrame(animationLoop);
     return () => cancelAnimationFrame(requestRef.current);

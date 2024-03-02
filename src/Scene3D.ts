@@ -28,13 +28,12 @@ export default class Scene3D {
   public composer: EffectComposer;
   public sceneObjects: any = [];
   public noteObjects: any = [];
-  public noteTweens: any = [];
   public glitch: GlitchEffect;
   public bloom: BloomEffect;
   public pixelate: PixelationEffect;
   public grid: GridEffect;
   public smaa: SMAAEffect;
-  
+
   public ambientLight: THREE.AmbientLight = new THREE.AmbientLight(0x888888);
   public uniforms: any;
   public megaLight: THREE.RectAreaLight = new THREE.RectAreaLight(

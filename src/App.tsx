@@ -6,6 +6,8 @@ import Emittery from "emittery";
 import Scene3D from "./Scene3D";
 import "./App.css";
 import { actionMidi, startMidi } from "./lib/midi";
+import { getRandomItem } from "./lib/utils";
+import { events, tape } from "./lib/recorder";
 
 Emittery.isDebugEnabled = true;
 let emitter = new Emittery({ debug: { name: "myEmitter1" } });
@@ -18,21 +20,6 @@ var BPM: any = require("bpm");
 const getRandomOffset: any = (arr: Array<any>, current: any): any => {
   const off = Math.floor(Math.random() * arr.length);
   return off !== current ? off : getRandomOffset(arr, current);
-};
-
-const getRandomItem: any = (arr: Array<any>): any => {
-  return arr[getRandomOffset(arr, -1)];
-};
-
-type events = {
-  e: any;
-  time: number;
-};
-
-type tape = {
-  duration: number;
-  repeater: number;
-  events: Array<events>;
 };
 
 let noteTweens: any = [];

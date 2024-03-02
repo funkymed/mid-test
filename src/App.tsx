@@ -136,7 +136,20 @@ function App() {
   const animationLoop = (time: number) => {
     TWEEN.update();
 
-    scene.updateAnimation(time, speed);
+    scene.composer.render();
+
+    scene.uniforms["time"].value = time / 500;
+
+    if (scene.groupMsh) {
+      scene.groupMsh.rotation.y -= 0.1;
+    }
+    scene.sceneObjects.forEach((object: THREE.Mesh, r: any) => {
+      const delta = time / speed;
+      object.rotation.x += (popos + 1 / 100) * 2;
+      object.rotation.y += (popos / 2 + 1 / 200) * 2;
+      object.position.y = (Math.sin(delta + r) * (yy * 30) * scene.nbCube) / 2;
+      object.position.z = (Math.sin(delta + r) * (xx * 30) * scene.nbCube) / 2;
+    });
     requestRef.current = requestAnimationFrame(animationLoop);
   };
 

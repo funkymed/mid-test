@@ -221,20 +221,5 @@ export default class Scene3D {
       this.sceneObjects.push(mesh);
     }
   }
-  updateAnimation(time: any, speed: number) {
-    this.composer.render();
-
-    this.uniforms["time"].value = time / 500;
-
-    if (this.groupMsh) {
-      this.groupMsh.rotation.y -= 0.1;
-    }
-    this.sceneObjects.forEach((object: THREE.Mesh, r: any) => {
-      const delta = time / speed;
-      // object.rotation.x += (popos + 1 / 100) * 2;
-      // object.rotation.y += (popos / 2 + 1 / 200) * 2;
-      // object.position.y = (Math.sin(delta + r) * (yy * 30) * nbCube) / 2;
-      // object.position.z = (Math.sin(delta + r) * (xx * 30) * nbCube) / 2;
-    });
-  }
+  
 }

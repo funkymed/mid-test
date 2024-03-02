@@ -1,4 +1,3 @@
-// @ts-check
 import * as THREE from "three";
 import {
   BloomEffect,
@@ -116,7 +115,7 @@ export default class Scene3D {
 
     const controls = new OrbitControls(this.camera, this.renderer.domElement);
     controls.update();
-    window.addEventListener("resize", this.resize);
+    window.addEventListener("resize", this.resize.bind(this));
   }
 
   resize() {
@@ -125,8 +124,9 @@ export default class Scene3D {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); //set pixel ratio
-    this.renderer.setSize(window.innerWidth, window.innerHeight); // make it full screen
+    this.renderer.setSize(width, height); // make it full screen
   }
+
   loadObj() {
     const loader = new GLTFLoader();
     loader.load("WHDv-fish-tank.glb", this.addedSceneAfterLoad.bind(this));

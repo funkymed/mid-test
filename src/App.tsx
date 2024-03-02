@@ -2,12 +2,12 @@ import * as THREE from "three";
 import { useEffect, useRef, useState } from "react";
 import TWEEN from "@tweenjs/tween.js";
 import { GlitchMode } from "postprocessing"; // https://github.com/pmndrs/postprocessing
-import Emittery from "emittery";
+import Emittery from "emittery"; // https://www.npmjs.com/package/emittery
 import Scene3D from "./Scene3D";
 import "./App.css";
 import { actionMidi, startMidi } from "./lib/midi";
 import { getRandomItem } from "./lib/utils";
-import { events, tape } from "./lib/recorder";
+import Recorder from "./lib/Recorder";
 
 Emittery.isDebugEnabled = true;
 let emitter = new Emittery({ debug: { name: "myEmitter1" } });
@@ -16,6 +16,7 @@ emitter.on("saucisse", (data) => {
   console.log(data);
 });
 
+let tempoInterval = 0;
 var BPM: any = require("bpm");
 const getRandomOffset: any = (arr: Array<any>, current: any): any => {
   const off = Math.floor(Math.random() * arr.length);
@@ -23,13 +24,8 @@ const getRandomOffset: any = (arr: Array<any>, current: any): any => {
 };
 
 let noteTweens: any = [];
-let timeFly: THREE.Clock;
-let isRecording: boolean = false;
-let tapeOffset: number = 0;
-let magneto: Array<tape> = [];
-let isLoopActivated: boolean = true;
 let speed: number = 500;
-let scene: Scene3D;
+let MyScene: Scene3D;
 
 var b = new BPM();
 
@@ -40,7 +36,7 @@ const colors = [
 const notes = ["C3", "D3", "E3", "F3", "G3", "A3", "B3"];
 
 function init() {
-  scene = new Scene3D(notes, colors);
+  MyScene = new Scene3D(notes, colors);
 }
 
 function App() {
@@ -49,6 +45,7 @@ function App() {
   const [y, setY] = useState(0);
   const [bpm, setBpm] = useState(0);
   const requestRef = useRef<any>();
+  const bpmTick = useRef<any>();
 
   let xx = 0;
   let yy = 0;
@@ -80,7 +77,7 @@ function App() {
       if (noteTweens[n]) {
         TWEEN.remove(noteTweens[n]);
       }
-      scene.noteObjects[n].intensity = attack;
+      MyScene.noteObjects[n].intensity = attack;
       callbackNote(n, attack, aftertouch);
     }
   };
@@ -89,13 +86,13 @@ function App() {
     if (twn) {
       TWEEN.remove(twn);
     }
-    const msh: THREE.RectAreaLight = scene.noteObjects[note];
+    const msh: THREE.RectAreaLight = MyScene.noteObjects[note];
     if (msh) {
       if (aftertouch) {
         msh.intensity = attack;
         msh.height = attack * 50;
       } else {
-        noteTweens[note] = new TWEEN.Tween(scene.noteObjects[note])
+        noteTweens[note] = new TWEEN.Tween(MyScene.noteObjects[note])
           .to({ intensity: 0, height: 0 }, 1000)
           .easing(TWEEN.Easing.Sinusoidal.InOut)
           .end()
@@ -105,8 +102,8 @@ function App() {
   };
 
   const megaLightFlash = (value: any) => {
-    scene.megaLight.intensity = 0.3;
-    new TWEEN.Tween(scene.megaLight)
+    MyScene.megaLight.intensity = 0.3;
+    new TWEEN.Tween(MyScene.megaLight)
       .to({ intensity: 0 }, 1000)
       .easing(TWEEN.Easing.Sinusoidal.InOut)
       .end()
@@ -116,8 +113,8 @@ function App() {
   const backFlash = (note: any, attack: any, aftertouch: any) => {
     if (aftertouch) {
       const color = note === "C2" ? getRandomItem(colors) : 0xffffff;
-      scene.scene.background = new THREE.Color(color);
-      new TWEEN.Tween(scene.scene)
+      MyScene.scene.background = new THREE.Color(color);
+      new TWEEN.Tween(MyScene.scene)
         .to({ background: new THREE.Color(0x000000) }, 200)
         .easing(TWEEN.Easing.Sinusoidal.InOut)
         .start();
@@ -136,120 +133,71 @@ function App() {
   const animationLoop = (time: number) => {
     TWEEN.update();
 
-    scene.composer.render();
+    MyScene.composer.render();
 
-    scene.uniforms["time"].value = time / 500;
+    MyScene.uniforms["time"].value = time / 500;
 
-    if (scene.groupMsh) {
-      scene.groupMsh.rotation.y -= 0.1;
+    if (MyScene.groupMsh) {
+      MyScene.groupMsh.rotation.y -= 0.1;
     }
-    scene.sceneObjects.forEach((object: THREE.Mesh, r: any) => {
+    MyScene.sceneObjects.forEach((object: THREE.Mesh, r: any) => {
       const delta = time / speed;
       object.rotation.x += (popos + 1 / 100) * 2;
       object.rotation.y += (popos / 2 + 1 / 200) * 2;
-      object.position.y = (Math.sin(delta + r) * (yy * 30) * scene.nbCube) / 2;
-      object.position.z = (Math.sin(delta + r) * (xx * 30) * scene.nbCube) / 2;
+      object.position.y =
+        (Math.sin(delta + r) * (yy * 30) * MyScene.nbCube) / 2;
+      object.position.z =
+        (Math.sin(delta + r) * (xx * 30) * MyScene.nbCube) / 2;
     });
     requestRef.current = requestAnimationFrame(animationLoop);
   };
 
   const tapeBPM = (note: any, attack: any, aftertouch: any) => {
     if (aftertouch) {
-      setBpm(b.tap().avg);
+      let tap = b.tap();
+      console.log(tap);
+      if (tap.count > 7) {
+        b.reset();
+        tap = b.tap();
+      }
+      setBpm(tap.avg);
+      window.clearInterval(tempoInterval);
+      if (tap.ms && tap.ms > 100) {
+        tempoInterval = window.setInterval(() => {
+          bpmTick.current.style.opacity = 1;
+
+          new TWEEN.Tween(bpmTick.current.style)
+            .to({ opacity: 0 }, tap.ms)
+            .easing(TWEEN.Easing.Sinusoidal.Out)
+            .start();
+        }, tap.ms);
+      }
     }
   };
   const glitchNote = (note: any, attack: any, aftertouch: any) => {
-    scene.glitch.mode = GlitchMode.CONSTANT_WILD;
+    MyScene.glitch.mode = GlitchMode.CONSTANT_WILD;
     setTimeout(() => {
-      scene.glitch.mode = GlitchMode.DISABLED;
+      MyScene.glitch.mode = GlitchMode.DISABLED;
     }, 300);
   };
 
   const ambiantCallback = (value: any) => {
-    scene.ambientLight.intensity = value * 3;
+    MyScene.ambientLight.intensity = value * 3;
   };
 
-  const resetRecorder = (note: any, attack: any, aftertouch: any) => {
-    if (!aftertouch) {
-      emitter.emit("saucisse", "resetPos");
-      magneto.forEach((man) => {
-        window.clearInterval(man.repeater);
-      });
-      magneto = [];
-    }
-  };
-  const recordAndPlay = (note: any, attack: any, aftertouch: any) => {
-    if (aftertouch && !isRecording) {
-      magneto.forEach((man, o) => {
-        window.clearInterval(man.repeater);
-        if (man.events.length === 0) {
-          delete magneto[o];
-        }
-      });
-      // start recording
-      isRecording = true;
-      timeFly = new THREE.Clock();
-      timeFly.start();
-      tapeOffset = magneto.length;
-      magneto[tapeOffset] = {
-        duration: 0,
-        events: [],
-        repeater: 0,
-      };
-    } else if (isRecording) {
-      // play
-      isRecording = false;
-      if (timeFly) {
-        timeFly.stop();
-        magneto[tapeOffset].duration = timeFly.elapsedTime;
-      }
-
-      // restart replay
-      console.log("restart replay");
-      magneto.forEach((tape, o) => {
-        if (tape.events.length > 0) {
-          playTape(tape);
-        }
-      });
-    }
-  };
-
-  const playTape = (tape: tape) => {
-    window.clearInterval(tape.repeater);
-    tape.repeater = window.setInterval(
-      playEvents,
-      tape.duration * 1000,
-      tape.events
-    );
-    playEvents(tape.events);
-  };
-
-  const playEvents = (events: any) => {
-    events.forEach((data: events) => {
-      setTimeout(actionMidi, data.time * 1000, data.e);
-    });
-  };
-
-  const record = (e: any) => {
-    if (isRecording) {
-      magneto[tapeOffset].events.push({
-        time: timeFly.getElapsedTime(),
-        e,
-      });
-    }
-  };
+  const recorder = new Recorder(actionMidi);
 
   const pixelateNote = (note: any, attack: any, aftertouch: any) => {
-    scene.pixelate.granularity = 64;
-    noteTweens[note] = new TWEEN.Tween(scene.pixelate)
+    MyScene.pixelate.granularity = 64;
+    noteTweens[note] = new TWEEN.Tween(MyScene.pixelate)
       .to({ granularity: 0 }, 300)
       .easing(TWEEN.Easing.Sinusoidal.InOut)
       .start();
   };
 
   const bloomNote = (note: any, attack: any, aftertouch: any) => {
-    scene.bloom.intensity = 20;
-    noteTweens[note] = new TWEEN.Tween(scene.bloom)
+    MyScene.bloom.intensity = 20;
+    noteTweens[note] = new TWEEN.Tween(MyScene.bloom)
       .to({ intensity: 4 }, 300)
       .easing(TWEEN.Easing.Sinusoidal.InOut)
       .start();
@@ -286,12 +234,12 @@ function App() {
         A3: callbackNote,
         B3: callbackNote,
         A4: tapeBPM,
-        B4: resetRecorder,
-        C5: recordAndPlay,
+        B4: recorder.resetRecorder.bind(recorder),
+        C5: recorder.recordAndPlay.bind(recorder),
       },
       pitchbend: pitchbendCallback,
       debug: false,
-      record: record,
+      record: recorder.record.bind(recorder),
       recordNote: "C5",
     });
 
@@ -312,6 +260,19 @@ function App() {
         <br />
         bpm : {bpm}
       </div>
+      <span
+        ref={bpmTick}
+        style={{
+          position: "absolute",
+          top: 15,
+          right: 15,
+          background: "#FFBB00",
+          height: 15,
+          width: 15,
+          borderRadius: 7,
+          display: "block",
+        }}
+      />
       <div
         style={{ position: "absolute", bottom: 5, right: 5, color: "white" }}
       >

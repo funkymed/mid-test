@@ -8,7 +8,6 @@ import {
   GlitchEffect,
   GlitchMode,
   PixelationEffect,
-  ScanlineEffect,
   GridEffect,
   SMAAEffect,
   SMAAPreset,
@@ -35,7 +34,9 @@ export default class Scene3D {
   public smaa: SMAAEffect;
 
   public ambientLight: THREE.AmbientLight = new THREE.AmbientLight(0x888888);
-  public uniforms: any;
+  public uniforms: any = {
+    time: { value: 1.0 },
+  };
   public megaLight: THREE.RectAreaLight = new THREE.RectAreaLight(
     0xffffff,
     120,
@@ -128,7 +129,6 @@ export default class Scene3D {
   }
   loadObj() {
     const loader = new GLTFLoader();
-    const _this = this;
     loader.load("WHDv-fish-tank.glb", this.addedSceneAfterLoad.bind(this));
   }
 
@@ -139,10 +139,6 @@ export default class Scene3D {
 
   startShader() {
     const geometry = new THREE.PlaneGeometry(2, 2);
-
-    this.uniforms = {
-      time: { value: 1.0 },
-    };
 
     const material = new THREE.ShaderMaterial({
       uniforms: this.uniforms,
@@ -197,17 +193,6 @@ export default class Scene3D {
     // Cubes
     let geometry = new THREE.BoxGeometry(1.2, 1.2, 1.2);
     for (let r = 0; r < this.nbCube; r++) {
-      let uniforms = {
-        colorB: {
-          type: "vec3",
-          value: new THREE.Color(getRandomItem(this.colors)),
-        },
-        colorA: {
-          type: "vec3",
-          value: new THREE.Color(getRandomItem(this.colors)),
-        },
-      };
-
       let material = new THREE.MeshStandardMaterial({
         color: getRandomItem(this.colors),
         roughness: 0,
@@ -221,5 +206,4 @@ export default class Scene3D {
       this.sceneObjects.push(mesh);
     }
   }
-  
 }
